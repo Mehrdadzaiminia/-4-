@@ -1,0 +1,146 @@
+//+------------------------------------------------------------------+
+//|         Darvas Box (TV Port, Final Fix for MT5)                  |
+//+------------------------------------------------------------------+
+#property indicator_chart_window
+#property indicator_buffers 2
+#property indicator_plots   2
+
+#property indicator_label1  "Top Box"
+#property indicator_type1   DRAW_LINE
+#property indicator_color1  clrLime
+#property indicator_width1  2
+
+#property indicator_label2  "Bottom Box"
+#property indicator_type2   DRAW_LINE
+#property indicator_color2  clrRed
+#property indicator_width2  2
+
+input int boxp = 5;
+
+double TopBox[];
+double BottomBox[];
+
+//+------------------------------------------------------------------+
+//| Helper: get highest value in window                              |
+//+------------------------------------------------------------------+
+double Highest(const double &arr[], int len, int start)
+{
+   double maxv = arr[start];
+   int sz = ArraySize(arr);
+   for(int j=1; j < len; j++)
+   {
+      int idx = start+j;
+      if(idx >= sz) break;
+      if(arr[idx] > maxv) maxv = arr[idx];
+   }
+   return maxv;
+}
+
+//+------------------------------------------------------------------+
+//| Helper: get lowest value in window                               |
+//+------------------------------------------------------------------+
+double Lowest(const double &arr[], int len, int start)
+{
+   double minv = arr[start];
+   int sz = ArraySize(arr);
+   for(int j=1; j < len; j++)
+   {
+      int idx = start+j;
+      if(idx >= sz) break;
+      if(arr[idx] < minv) minv = arr[idx];
+   }
+   return minv;
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator initialization function                         |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   SetIndexBuffer(0, TopBox, INDICATOR_DATA);
+   SetIndexBuffer(1, BottomBox, INDICATOR_DATA);
+
+   PlotIndexSetInteger(0, PLOT_DRAW_TYPE, DRAW_LINE);
+   PlotIndexSetInteger(1, PLOT_DRAW_TYPE, DRAW_LINE);
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Custom indicator iteration function                              |
+//+------------------------------------------------------------------+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+   if(rates_total < boxp+3)
+      return(0);
+
+   // ãÞÏÇÑÏåí Çæáíå
+   ArrayInitialize(TopBox, EMPTY_VALUE);
+   ArrayInitialize(BottomBox, EMPTY_VALUE);
+
+   double NH = 0;
+   int lastBreakoutBar = -1000;
+
+   double lastValidTop = EMPTY_VALUE;
+   double lastValidBot = EMPTY_VALUE;
+
+   // ÇÈÊÏÇ ãÍÇÓÈå ÈÇ˜ÓåÇ (ÇÒ ÞÏíã Èå ÌÏíÏ)
+   for(int i = rates_total - boxp - 3; i >= 0; i--)
+   {
+      int idx = i;
+
+      double LL = Lowest(low, boxp, idx);
+      double k1 = Highest(high, boxp, idx);
+      double k2 = Highest(high, boxp-1, idx);
+      double k3 = Highest(high, boxp-2, idx);
+
+      double prev_k1 = Highest(high, boxp, idx+1);
+      if(high[idx] > prev_k1)
+      {
+         NH = high[idx];
+         lastBreakoutBar = idx;
+      }
+
+      bool box1 = (k3 < k2);
+      int barsSinceBreak = lastBreakoutBar - idx;
+      if(barsSinceBreak == boxp-2 && box1)
+      {
+         TopBox[idx]    = NH;
+         BottomBox[idx] = LL;
+         lastValidTop = NH;
+         lastValidBot = LL;
+      }
+      else
+      {
+         TopBox[idx]    = EMPTY_VALUE;
+         BottomBox[idx] = EMPTY_VALUE;
+      }
+   }
+
+   // ÝæÑæÇÑÏ ˜ÑÏä ãÞÏÇÑ ÂÎÑíä ÈÇ˜Ó ÊÇ ˜äÏá 0 (ÓãÊ ÑÇÓÊ ÇÑÊ)
+   // íÏÇ ˜ÑÏä ÂÎÑíä TopBox æ BottomBox ãÚÊÈÑ
+   double lastTop = EMPTY_VALUE, lastBot = EMPTY_VALUE;
+   for(int i = 0; i < rates_total; i++)
+   {
+      if(TopBox[i] != EMPTY_VALUE)
+         lastTop = TopBox[i];
+      else
+         TopBox[i] = lastTop;
+
+      if(BottomBox[i] != EMPTY_VALUE)
+         lastBot = BottomBox[i];
+      else
+         BottomBox[i] = lastBot;
+   }
+
+   return(rates_total);
+}
